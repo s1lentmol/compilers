@@ -1,0 +1,20 @@
+// ЛР7: массивы — пузырьковая сортировка
+var data = [5, 2, 9, 1, 7, 3];
+var n = len(data);
+
+var i = 0;
+while (i < n - 1) {
+    var j = 0;
+    while (j < n - 1 - i) {
+        if (data[j] > data[j + 1]) {
+            var temp = data[j];
+            data[j] = data[j + 1];
+            data[j + 1] = temp;
+        }
+        j = j + 1;
+    }
+    i = i + 1;
+}
+
+print "Отсортированный массив:";
+print data;

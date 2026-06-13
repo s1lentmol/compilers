@@ -5,24 +5,25 @@ type Position struct {
 	Column int
 }
 
-// Node - base interface for all AST nodes
 type Node interface{}
 
-// Expression - interface for all expression nodes
-type Expression interface {
-	Node
-}
+type Expression interface{}
 
-// Statement - interface for all statement nodes
-type Statement interface {
-	Node
-}
-
-// --- Expressions ---
+type Statement interface{}
 
 type NumberExpression struct {
 	Position Position
 	Value    float64
+}
+
+type StringExpression struct {
+	Position Position
+	Value    string
+}
+
+type BooleanExpression struct {
+	Position Position
+	Value    bool
 }
 
 type VariableExpression struct {
@@ -49,7 +50,29 @@ type AssignExpression struct {
 	Value    Expression
 }
 
-// --- Statements ---
+type CallExpression struct {
+	Position  Position
+	Callee    Expression
+	Arguments []Expression
+}
+
+type ArrayExpression struct {
+	Position Position
+	Elements []Expression
+}
+
+type IndexExpression struct {
+	Position   Position
+	Collection Expression
+	Index      Expression
+}
+
+type IndexAssignExpression struct {
+	Position   Position
+	Collection Expression
+	Index      Expression
+	Value      Expression
+}
 
 type VarStatement struct {
 	Position    Position
@@ -83,4 +106,16 @@ type BlockStatement struct {
 type ExpressionStatement struct {
 	Position   Position
 	Expression Expression
+}
+
+type FunctionStatement struct {
+	Position   Position
+	Name       string
+	Parameters []string
+	Body       *BlockStatement
+}
+
+type ReturnStatement struct {
+	Position Position
+	Value    Expression
 }

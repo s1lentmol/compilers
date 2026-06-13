@@ -1,34 +1,64 @@
 package semantic
 
+import "compilers/parser"
+
+type SymbolKind int
+
+const (
+	KindVar SymbolKind = iota
+	KindFunc
+	KindParam
+)
+
+type Symbol struct {
+	Name     string
+	Kind     SymbolKind
+	Type     Type
+	Arity    int
+	Position parser.Position
+	Used     bool
+}
+
 type Environment struct {
-	parent    *Environment
-	variables map[string]struct{}
+	parent  *Environment
+	symbols map[string]*Symbol
+	order   []string
 }
 
 func NewEnvironment(parent *Environment) *Environment {
 	return &Environment{
-		parent:    parent,
-		variables: make(map[string]struct{}),
+		parent:  parent,
+		symbols: make(map[string]*Symbol),
 	}
 }
 
-func (e *Environment) Define(name string) bool {
-	if _, exists := e.variables[name]; exists {
+func (e *Environment) Define(symbol *Symbol) bool {
+	if _, exists := e.symbols[symbol.Name]; exists {
 		return false
 	}
-
-	e.variables[name] = struct{}{}
+	e.symbols[symbol.Name] = symbol
+	e.order = append(e.order, symbol.Name)
 	return true
 }
 
-func (e *Environment) IsDefined(name string) bool {
-	if _, exists := e.variables[name]; exists {
-		return true
+func (e *Environment) Resolve(name string) *Symbol {
+	if symbol, exists := e.symbols[name]; exists {
+		return symbol
 	}
-
 	if e.parent == nil {
-		return false
+		return nil
 	}
+	return e.parent.Resolve(name)
+}
 
-	return e.parent.IsDefined(name)
+func (e *Environment) IsDefined(name string) bool {
+	return e.Resolve(name) != nil
+}
+
+func (e *Environment) LocalSymbols() []*Symbol {
+	result := make([]*Symbol, 0, len(e.order))
+	for _, name := range e.order {
+		result = append(result, e.symbols[name])
+	}
+	return result
 }

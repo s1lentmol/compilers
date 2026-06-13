@@ -31,6 +31,9 @@ func (p *Parser) Parse() []Statement {
 }
 
 func (p *Parser) parseDeclaration() Statement {
+	if p.match(lexer.FUNC) {
+		return p.parseFunctionDeclaration()
+	}
 	if p.match(lexer.VAR) {
 		return p.parseVarDeclaration()
 	}
@@ -47,13 +50,41 @@ func (p *Parser) parseStatement() Statement {
 	if p.match(lexer.PRINT) {
 		return p.parsePrintStatement()
 	}
+	if p.match(lexer.RETURN) {
+		return p.parseReturnStatement()
+	}
 	if p.match(lexer.LBRACE) {
-		return &BlockStatement{
-			Position:   tokenPosition(p.previous()),
-			Statements: p.parseBlock(),
-		}
+		return p.parseBlockStatement()
 	}
 	return p.parseExpressionStatement()
+}
+
+func (p *Parser) parseFunctionDeclaration() Statement {
+	funcToken := p.previous()
+	name := p.consume(lexer.ID, "Ожидается имя функции.")
+
+	p.consume(lexer.LPAREN, "Ожидается '(' после имени функции.")
+	var parameters []string
+	if !p.check(lexer.RPAREN) {
+		for {
+			param := p.consume(lexer.ID, "Ожидается имя параметра.")
+			parameters = append(parameters, param.Value)
+			if !p.match(lexer.COMMA) {
+				break
+			}
+		}
+	}
+	p.consume(lexer.RPAREN, "Ожидается ')' после параметров.")
+
+	p.consume(lexer.LBRACE, "Ожидается '{' перед телом функции.")
+	body := p.parseBlockStatement().(*BlockStatement)
+
+	return &FunctionStatement{
+		Position:   tokenPosition(funcToken),
+		Name:       name.Value,
+		Parameters: parameters,
+		Body:       body,
+	}
 }
 
 func (p *Parser) parseVarDeclaration() Statement {
@@ -118,23 +149,40 @@ func (p *Parser) parsePrintStatement() Statement {
 	}
 }
 
+func (p *Parser) parseReturnStatement() Statement {
+	returnToken := p.previous()
+	var value Expression
+	if !p.check(lexer.SEMICOLON) {
+		value = p.parseExpression()
+	}
+	p.consume(lexer.SEMICOLON, "Ожидается ';' после return.")
+	return &ReturnStatement{
+		Position: tokenPosition(returnToken),
+		Value:    value,
+	}
+}
+
 func (p *Parser) parseExpressionStatement() Statement {
+	start := p.peek()
 	expr := p.parseExpression()
-	position := expressionPosition(expr)
 	p.consume(lexer.SEMICOLON, "Ожидается ';' после выражения.")
 	return &ExpressionStatement{
-		Position:   position,
+		Position:   tokenPosition(start),
 		Expression: expr,
 	}
 }
 
-func (p *Parser) parseBlock() []Statement {
+func (p *Parser) parseBlockStatement() Statement {
+	braceToken := p.previous()
 	var statements []Statement
 	for !p.check(lexer.RBRACE) && !p.isAtEnd() {
 		statements = append(statements, p.parseDeclaration())
 	}
 	p.consume(lexer.RBRACE, "Ожидается '}' после блока.")
-	return statements
+	return &BlockStatement{
+		Position:   tokenPosition(braceToken),
+		Statements: statements,
+	}
 }
 
 func (p *Parser) parseExpression() Expression {
@@ -148,11 +196,19 @@ func (p *Parser) parseAssignment() Expression {
 		equals := p.previous()
 		value := p.parseAssignment()
 
-		if varExpr, ok := expr.(*VariableExpression); ok {
+		switch target := expr.(type) {
+		case *VariableExpression:
 			return &AssignExpression{
-				Position: varExpr.Position,
-				Name:     varExpr.Name,
+				Position: target.Position,
+				Name:     target.Name,
 				Value:    value,
+			}
+		case *IndexExpression:
+			return &IndexAssignExpression{
+				Position:   target.Position,
+				Collection: target.Collection,
+				Index:      target.Index,
+				Value:      value,
 			}
 		}
 
@@ -239,7 +295,7 @@ func (p *Parser) parseTerm() Expression {
 
 func (p *Parser) parseFactor() Expression {
 	expr := p.parseUnary()
-	for p.match(lexer.STAR, lexer.SLASH) {
+	for p.match(lexer.STAR, lexer.SLASH, lexer.PERCENT) {
 		operatorToken := p.previous()
 		right := p.parseUnary()
 		expr = &BinaryExpression{
@@ -262,7 +318,49 @@ func (p *Parser) parseUnary() Expression {
 			Right:    right,
 		}
 	}
-	return p.parsePrimary()
+	return p.parseCall()
+}
+
+func (p *Parser) parseCall() Expression {
+	expr := p.parsePrimary()
+
+	for {
+		if p.match(lexer.LPAREN) {
+			expr = p.finishCall(expr)
+		} else if p.match(lexer.LBRACKET) {
+			bracket := p.previous()
+			index := p.parseExpression()
+			p.consume(lexer.RBRACKET, "Ожидается ']' после индекса.")
+			expr = &IndexExpression{
+				Position:   tokenPosition(bracket),
+				Collection: expr,
+				Index:      index,
+			}
+		} else {
+			break
+		}
+	}
+
+	return expr
+}
+
+func (p *Parser) finishCall(callee Expression) Expression {
+	paren := p.previous()
+	var arguments []Expression
+	if !p.check(lexer.RPAREN) {
+		for {
+			arguments = append(arguments, p.parseExpression())
+			if !p.match(lexer.COMMA) {
+				break
+			}
+		}
+	}
+	p.consume(lexer.RPAREN, "Ожидается ')' после аргументов.")
+	return &CallExpression{
+		Position:  tokenPosition(paren),
+		Callee:    callee,
+		Arguments: arguments,
+	}
 }
 
 func (p *Parser) parsePrimary() Expression {
@@ -275,12 +373,32 @@ func (p *Parser) parsePrimary() Expression {
 		}
 	}
 
+	if p.match(lexer.STRING) {
+		stringToken := p.previous()
+		return &StringExpression{
+			Position: tokenPosition(stringToken),
+			Value:    stringToken.Value,
+		}
+	}
+
+	if p.match(lexer.TRUE) {
+		return &BooleanExpression{Position: tokenPosition(p.previous()), Value: true}
+	}
+
+	if p.match(lexer.FALSE) {
+		return &BooleanExpression{Position: tokenPosition(p.previous()), Value: false}
+	}
+
 	if p.match(lexer.ID) {
 		idToken := p.previous()
 		return &VariableExpression{
 			Position: tokenPosition(idToken),
 			Name:     idToken.Value,
 		}
+	}
+
+	if p.match(lexer.LBRACKET) {
+		return p.parseArrayLiteral()
 	}
 
 	if p.match(lexer.LPAREN) {
@@ -290,6 +408,24 @@ func (p *Parser) parsePrimary() Expression {
 	}
 
 	panic(fmt.Sprintf("[Parser Error] Line %d, Col %d: Ожидается выражение.", p.peek().Line, p.peek().Column))
+}
+
+func (p *Parser) parseArrayLiteral() Expression {
+	bracket := p.previous()
+	var elements []Expression
+	if !p.check(lexer.RBRACKET) {
+		for {
+			elements = append(elements, p.parseExpression())
+			if !p.match(lexer.COMMA) {
+				break
+			}
+		}
+	}
+	p.consume(lexer.RBRACKET, "Ожидается ']' после элементов массива.")
+	return &ArrayExpression{
+		Position: tokenPosition(bracket),
+		Elements: elements,
+	}
 }
 
 func (p *Parser) match(types ...lexer.TokenType) bool {
@@ -333,21 +469,4 @@ func (p *Parser) consume(tokenType lexer.TokenType, message string) lexer.Token 
 		return p.advance()
 	}
 	panic(fmt.Sprintf("[Parser Error] Line %d, Col %d: %s", p.peek().Line, p.peek().Column, message))
-}
-
-func expressionPosition(expr Expression) Position {
-	switch value := expr.(type) {
-	case *NumberExpression:
-		return value.Position
-	case *VariableExpression:
-		return value.Position
-	case *BinaryExpression:
-		return value.Position
-	case *UnaryExpression:
-		return value.Position
-	case *AssignExpression:
-		return value.Position
-	default:
-		return Position{}
-	}
 }

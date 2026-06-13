@@ -1,0 +1,4 @@
+.DS_Store
+/compilers
+*.out
+*.test

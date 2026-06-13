@@ -6,48 +6,54 @@ const (
 	NUMBER TokenType = iota
 	ID
 	STRING
-	VAR
+	TRUE
+	FALSE
 
+	VAR
 	PRINT
 	IF
 	ELSE
 	WHILE
+	FUNC
+	RETURN
 
-	// Operators
-	PLUS  // +
-	MINUS // -
-	STAR  // *
-	SLASH // /
-	EQ    // =
-	EQEQ  // ==
-	EXCL  // !
-	NEQ   // !=
-	LT    // <
-	GT    // >
-	LTEQ  // <=
-	GTEQ  // >=
-	AND   // &&
-	OR    // ||
+	PLUS
+	MINUS
+	STAR
+	SLASH
+	PERCENT
+	EQ
+	EQEQ
+	EXCL
+	NEQ
+	LT
+	GT
+	LTEQ
+	GTEQ
+	AND
+	OR
 
-	// Grouping & Punctuation
-	LPAREN    // (
-	RPAREN    // )
-	LBRACE    // {
-	RBRACE    // }
-	SEMICOLON // ;
+	LPAREN
+	RPAREN
+	LBRACE
+	RBRACE
+	LBRACKET
+	RBRACKET
+	COMMA
+	SEMICOLON
 
 	EOF
 )
 
 func (t TokenType) String() string {
 	return [...]string{
-		"NUMBER", "ID", "STRING", "VAR",
-		"PRINT", "IF", "ELSE", "WHILE",
-		"PLUS", "MINUS", "STAR", "SLASH",
+		"NUMBER", "ID", "STRING", "TRUE", "FALSE",
+		"VAR", "PRINT", "IF", "ELSE", "WHILE", "FUNC", "RETURN",
+		"PLUS", "MINUS", "STAR", "SLASH", "PERCENT",
 		"EQ", "EQEQ", "EXCL", "NEQ",
 		"LT", "GT", "LTEQ", "GTEQ",
 		"AND", "OR",
-		"LPAREN", "RPAREN", "LBRACE", "RBRACE",
-		"SEMICOLON", "EOF",
+		"LPAREN", "RPAREN", "LBRACE", "RBRACE", "LBRACKET", "RBRACKET",
+		"COMMA", "SEMICOLON", "EOF",
 	}[t]
 }
